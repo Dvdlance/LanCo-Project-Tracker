@@ -2,13 +2,13 @@ import React, { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { updateProject, getNotes, addNote, deleteNote, getProjectMembers, getAllProfiles, addProjectMember, removeProjectMember } from '../lib/db'
 import { CAN, ROLE_LABELS } from '../lib/constants'
-
+ 
 const TABS = ['checklist','schedule','financials','notes','subs','team']
 const TAB_LABELS = { checklist:'Checklist', schedule:'Schedule', financials:'Financials', notes:'Notes', subs:'Subcontractors', team:'Team' }
 const OWNERS = ['David','Admin','PM','Employee','Sub']
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
-
+ 
 export default function ProjectPage({ projectId, profile, onBack }) {
   const [project, setProject] = useState(null)
   const [tab, setTab] = useState('checklist')
@@ -20,7 +20,7 @@ export default function ProjectPage({ projectId, profile, onBack }) {
   const [noteText, setNoteText] = useState('')
   const [members, setMembers] = useState([])
   const [allProfiles, setAllProfiles] = useState([])
-
+ 
   useEffect(() => {
     if (!projectId) return
     loadProject()
@@ -34,7 +34,7 @@ export default function ProjectPage({ projectId, profile, onBack }) {
       .subscribe()
     return () => supabase.removeChannel(ch)
   }, [projectId])
-
+ 
   const loadProject = async () => {
     const { data } = await supabase.from('projects').select('*').eq('id', projectId).single()
     setProject(data)
@@ -51,18 +51,18 @@ export default function ProjectPage({ projectId, profile, onBack }) {
     const { data } = await getAllProfiles()
     setAllProfiles(data || [])
   }
-
+ 
   const update = async (changes) => {
     await updateProject(projectId, changes)
   }
-
+ 
   const toggleTask = async (pid, idx, val) => {
     if (!CAN.checkOffTasks(profile?.role)) return
     const state = { ...(project.task_state || {}), [`${pid}-${idx}`]: val }
     setProject(p => ({ ...p, task_state: state }))
     await update({ task_state: state })
   }
-
+ 
   const editTaskText = async (pid, idx, val) => {
     if (!CAN.editChecklist(profile?.role)) return
     const phases = JSON.parse(JSON.stringify(project.phases))
@@ -70,7 +70,7 @@ export default function ProjectPage({ projectId, profile, onBack }) {
     setProject(p => ({ ...p, phases }))
     await update({ phases })
   }
-
+ 
   const editTaskOwner = async (pid, idx, val) => {
     if (!CAN.editChecklist(profile?.role)) return
     const phases = JSON.parse(JSON.stringify(project.phases))
@@ -78,7 +78,7 @@ export default function ProjectPage({ projectId, profile, onBack }) {
     setProject(p => ({ ...p, phases }))
     await update({ phases })
   }
-
+ 
   const editPhaseLabel = async (pid, val) => {
     if (!CAN.editChecklist(profile?.role)) return
     const phases = JSON.parse(JSON.stringify(project.phases))
@@ -86,7 +86,7 @@ export default function ProjectPage({ projectId, profile, onBack }) {
     setProject(p => ({ ...p, phases }))
     await update({ phases })
   }
-
+ 
   const editDrawLabel = async (idx, val) => {
     if (!CAN.editFinancials(profile?.role)) return
     const draws = JSON.parse(JSON.stringify(project.draws))
@@ -94,7 +94,7 @@ export default function ProjectPage({ projectId, profile, onBack }) {
     setProject(p => ({ ...p, draws }))
     await update({ draws })
   }
-
+ 
   const editDrawPct = async (idx, val) => {
     if (!CAN.editFinancials(profile?.role)) return
     const draws = JSON.parse(JSON.stringify(project.draws))
@@ -102,7 +102,7 @@ export default function ProjectPage({ projectId, profile, onBack }) {
     setProject(p => ({ ...p, draws }))
     await update({ draws })
   }
-
+ 
   const toggleDraw = async (idx) => {
     if (!CAN.editFinancials(profile?.role)) return
     const dc = [...(project.draws_collected || [])]
@@ -111,13 +111,13 @@ export default function ProjectPage({ projectId, profile, onBack }) {
     setProject(p => ({ ...p, draws_collected: dc }))
     await update({ draws_collected: dc })
   }
-
+ 
   const saveContractValue = async (val) => {
     if (!CAN.editFinancials(profile?.role)) return
     setProject(p => ({ ...p, contract_value: val }))
     await update({ contract_value: val })
   }
-
+ 
   const autoSchedule = (startStr) => {
     const sched = []; let cur = new Date(startStr + 'T00:00:00')
     project.phases.forEach(p => {
@@ -128,14 +128,14 @@ export default function ProjectPage({ projectId, profile, onBack }) {
     })
     return sched
   }
-
+ 
   const resetSchedule = async (startStr) => {
     if (!CAN.editSchedule(profile?.role) || !startStr) return
     const schedule = autoSchedule(startStr)
     setProject(p => ({ ...p, schedule, start_date: startStr }))
     await update({ schedule, start_date: startStr })
   }
-
+ 
   const saveSchedPhase = async (pid, start, end) => {
     if (!CAN.editSchedule(profile?.role)) return
     const schedule = [...(project.schedule || [])]
@@ -145,45 +145,45 @@ export default function ProjectPage({ projectId, profile, onBack }) {
     await update({ schedule })
     setSchedModal(null)
   }
-
+ 
   const addSub = async (sub) => {
     if (!CAN.manageSubs(profile?.role)) return
     const subs = [...(project.subs || []), sub]
     setProject(p => ({ ...p, subs }))
     await update({ subs })
   }
-
+ 
   const removeSub = async (idx) => {
     if (!CAN.manageSubs(profile?.role)) return
     const subs = (project.subs || []).filter((_, i) => i !== idx)
     setProject(p => ({ ...p, subs }))
     await update({ subs })
   }
-
+ 
   const submitNote = async (e) => {
     e.preventDefault()
     if (!noteText.trim()) return
     await addNote(projectId, profile.id, noteText.trim())
     setNoteText('')
   }
-
+ 
   const pct = () => {
     const total = (project?.phases||[]).reduce((s, ph) => s + (ph.tasks?.length||0), 0)
     const done = Object.values(project?.task_state||{}).filter(Boolean).length
     return total ? Math.round(done/total*100) : 0
   }
-
+ 
   const phaseDone = (pid) => (project?.phases[pid]?.tasks||[]).every((_,i) => project?.task_state?.[`${pid}-${i}`])
   const phaseCount = (pid) => (project?.phases[pid]?.tasks||[]).filter((_,i) => project?.task_state?.[`${pid}-${i}`]).length
   const phaseLocked = (pid) => pid > 0 && !phaseDone(pid-1)
-
+ 
   const totalCollected = () => {
     const v = project?.contract_value||0
     return (project?.draws_collected||[]).reduce((s,i) => s + (v*((project?.draws[i]?.pct||0)/100)), 0)
   }
-
+ 
   if (!project) return <div style={{ padding:40, color:'var(--ink-light)' }}>Loading project…</div>
-
+ 
   const pc = pct()
   const visibleTabs = TABS.filter(t => {
     if (t === 'financials' && !CAN.viewFinancials(profile?.role)) return false
@@ -191,11 +191,11 @@ export default function ProjectPage({ projectId, profile, onBack }) {
     if (t === 'team' && !CAN.manageSubs(profile?.role)) return false
     return true
   })
-
+ 
   return (
     <div>
       {/* Sticky tab bar */}
-      <div style={{ display:'flex', alignItems:'stretch', borderBottom:'1px solid var(--rule)', background:'var(--white)', padding:'0 24px', position:'sticky', top:52, zIndex:200 }}>
+      <div style={{ display:'flex', alignItems:'stretch', borderBottom:'1px solid var(--rule)', background:'var(--white)', padding:'0 24px', position:'sticky', top:52, zIndex:200, minHeight:50 }}>
         <div style={{ display:'flex', alignItems:'center', flex:1, minWidth:0, padding:'8px 0' }}>
           <button className="btn-ghost" onClick={onBack} style={{ marginRight:14, fontSize:12, whiteSpace:'nowrap' }}>← All projects</button>
           <span style={{ fontSize:14, fontWeight:600, marginRight:8, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{project.client}</span>
@@ -215,8 +215,8 @@ export default function ProjectPage({ projectId, profile, onBack }) {
           </div>
         )}
       </div>
-
-      <div style={{ padding:'24px 28px' }}>
+ 
+      <div style={{ padding:'24px 28px', paddingTop:'32px' }}>
         {tab === 'checklist' && <ChecklistTab project={project} profile={profile} expanded={expanded} setExpanded={setExpanded} phaseDone={phaseDone} phaseCount={phaseCount} phaseLocked={phaseLocked} toggleTask={toggleTask} editTaskText={editTaskText} editTaskOwner={editTaskOwner} editPhaseLabel={editPhaseLabel} />}
         {tab === 'schedule' && <ScheduleTab project={project} profile={profile} calYear={calYear} calMonth={calMonth} setCalYear={setCalYear} setCalMonth={setCalMonth} schedModal={schedModal} setSchedModal={setSchedModal} resetSchedule={resetSchedule} saveSchedPhase={saveSchedPhase} />}
         {tab === 'financials' && <FinancialsTab project={project} profile={profile} toggleDraw={toggleDraw} editDrawLabel={editDrawLabel} editDrawPct={editDrawPct} saveContractValue={saveContractValue} totalCollected={totalCollected} />}
@@ -227,7 +227,7 @@ export default function ProjectPage({ projectId, profile, onBack }) {
     </div>
   )
 }
-
+ 
 // ── CHECKLIST TAB ────────────────────────────────
 function ChecklistTab({ project, profile, expanded, setExpanded, phaseDone, phaseCount, phaseLocked, toggleTask, editTaskText, editTaskOwner, editPhaseLabel }) {
   return (
@@ -249,14 +249,14 @@ function ChecklistTab({ project, profile, expanded, setExpanded, phaseDone, phas
     </div>
   )
 }
-
+ 
 function PhaseBlock({ phase, pid, locked, done, cnt, tot, isOpen, project, profile, onToggle, onToggleTask, onEditText, onEditOwner, onEditLabel }) {
   const [editingLabel, setEditingLabel] = useState(false)
   const [labelVal, setLabelVal] = useState(phase.label)
   const canEdit = CAN.editChecklist(profile?.role)
-
+ 
   const saveLabel = () => { setEditingLabel(false); if (labelVal.trim()) onEditLabel(pid, labelVal.trim()) }
-
+ 
   return (
     <div style={{ background:'var(--white)', border:'1px solid var(--rule)', borderRadius:'var(--r)', marginBottom:10, overflow:'hidden' }}>
       <div style={{ display:'flex', alignItems:'center', gap:10, padding:'12px 16px', background:'var(--white)', userSelect:'none' }}>
@@ -287,7 +287,7 @@ function PhaseBlock({ phase, pid, locked, done, cnt, tot, isOpen, project, profi
     </div>
   )
 }
-
+ 
 function TaskRow({ task, pid, idx, project, profile, checked, onToggle, onEditText, onEditOwner }) {
   const [editing, setEditing] = useState(false)
   const [val, setVal] = useState(task.text)
@@ -316,7 +316,7 @@ function TaskRow({ task, pid, idx, project, profile, checked, onToggle, onEditTe
     </div>
   )
 }
-
+ 
 // ── SCHEDULE TAB ─────────────────────────────────
 function ScheduleTab({ project, profile, calYear, calMonth, setCalYear, setCalMonth, schedModal, setSchedModal, resetSchedule, saveSchedPhase }) {
   const fmt = d => d.toISOString().slice(0,10)
@@ -329,7 +329,7 @@ function ScheduleTab({ project, profile, calYear, calMonth, setCalYear, setCalMo
   const sched = project.schedule || []
   const phases = project.phases || []
   const canEdit = CAN.editSchedule(profile?.role)
-
+ 
   const cells = []
   for (let c = 0; c < totalCells; c++) {
     const d = new Date(calYear, calMonth, 1 + c - startDow)
@@ -355,7 +355,7 @@ function ScheduleTab({ project, profile, calYear, calMonth, setCalYear, setCalMo
       </div>
     )
   }
-
+ 
   const [smStart, setSmStart] = useState('')
   const [smEnd, setSmEnd] = useState('')
   useEffect(() => {
@@ -364,7 +364,7 @@ function ScheduleTab({ project, profile, calYear, calMonth, setCalYear, setCalMo
       setSmStart(s.start||''); setSmEnd(s.end||'')
     }
   }, [schedModal])
-
+ 
   return (
     <div>
       <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16, flexWrap:'wrap' }}>
@@ -396,7 +396,7 @@ function ScheduleTab({ project, profile, calYear, calMonth, setCalYear, setCalMo
         })}
       </div>
       {canEdit && <p style={{ fontSize:11, color:'var(--ink-light)', marginTop:10 }}>Click any phase bar to adjust dates manually.</p>}
-
+ 
       {schedModal !== null && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:400, padding:20 }} onClick={e => { if(e.target===e.currentTarget) setSchedModal(null) }}>
           <div style={{ background:'#fff', borderRadius:'var(--r)', padding:24, width:'100%', maxWidth:400, boxShadow:'0 8px 32px rgba(0,0,0,0.18)' }}>
@@ -414,14 +414,14 @@ function ScheduleTab({ project, profile, calYear, calMonth, setCalYear, setCalMo
     </div>
   )
 }
-
+ 
 // ── FINANCIALS TAB ───────────────────────────────
 function FinancialsTab({ project, profile, toggleDraw, editDrawLabel, editDrawPct, saveContractValue, totalCollected }) {
   const [cvInput, setCvInput] = useState(project.contract_value||'')
   const v = project.contract_value||0
   const tc = totalCollected()
   const canEdit = CAN.editFinancials(profile?.role)
-
+ 
   return (
     <div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:16 }}>
@@ -458,7 +458,7 @@ function FinancialsTab({ project, profile, toggleDraw, editDrawLabel, editDrawPc
     </div>
   )
 }
-
+ 
 function DrawRow({ draw, idx, isDone, amt, canEdit, onToggle, onEditLabel, onEditPct }) {
   const [editingLabel, setEditingLabel] = useState(false)
   const [editingPct, setEditingPct] = useState(false)
@@ -480,7 +480,7 @@ function DrawRow({ draw, idx, isDone, amt, canEdit, onToggle, onEditLabel, onEdi
     </div>
   )
 }
-
+ 
 // ── NOTES TAB ────────────────────────────────────
 function NotesTab({ notes, profile, noteText, setNoteText, submitNote, deleteNote }) {
   const roleColors = { owner:'#1D9E75', admin:'#185FA5', pm:'#534AB7', employee:'#C97A18', sub:'#B83232' }
@@ -521,7 +521,7 @@ function NotesTab({ notes, profile, noteText, setNoteText, submitNote, deleteNot
     </div>
   )
 }
-
+ 
 // ── SUBS TAB ─────────────────────────────────────
 function SubsTab({ project, profile, addSub, removeSub }) {
   const [form, setForm] = useState({ name:'', trade:'', phone:'' })
@@ -557,7 +557,7 @@ function SubsTab({ project, profile, addSub, removeSub }) {
     </div>
   )
 }
-
+ 
 // ── TEAM TAB ─────────────────────────────────────
 function TeamTab({ projectId, profile, members, allProfiles, onAdd, onRemove }) {
   const memberIds = members.map(m => m.user_id)
