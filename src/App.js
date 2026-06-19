@@ -9,12 +9,25 @@ import UsersPage from './pages/UsersPage'
 export const AuthContext = createContext(null)
 export const useAuth = () => useContext(AuthContext)
 
+// Simple hook to detect mobile
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
+  return isMobile
+}
+
 export default function App() {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [page, setPage] = useState('dashboard')    // 'dashboard' | 'project' | 'users'
+  const [page, setPage] = useState('dashboard')
   const [activeProjectId, setActiveProjectId] = useState(null)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -36,9 +49,13 @@ export default function App() {
     setLoading(false)
   }
 
-  const openProject = (id) => { setActiveProjectId(id); setPage('project') }
-  const goHome = () => { setPage('dashboard'); setActiveProjectId(null) }
-  const goUsers = () => setPage('users')
+  const openProject = (id) => {
+    setActiveProjectId(id)
+    setPage('project')
+    setSidebarOpen(false)
+  }
+  const goHome = () => { setPage('dashboard'); setActiveProjectId(null); setSidebarOpen(false) }
+  const goUsers = () => { setPage('users'); setSidebarOpen(false) }
 
   if (loading) return <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',color:'var(--ink-light)'}}>Loading LanCo...</div>
   if (!session) return <LoginPage />
@@ -46,14 +63,31 @@ export default function App() {
   return (
     <AuthContext.Provider value={{ session, profile, reload: () => loadProfile(session.user.id) }}>
       <div style={{ display:'flex', flexDirection:'column', minHeight:'100vh' }}>
-        <Topbar profile={profile} onHome={goHome} onUsers={goUsers} page={page} />
-        <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
-          {page !== 'users' && (
-            <Sidebar profile={profile} onOpenProject={openProject} activeProjectId={activeProjectId} onHome={goHome} />
+        <Topbar profile={profile} onHome={goHome} onUsers={goUsers} isMobile={isMobile} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+
+        <div style={{ display:'flex', flex:1, position:'relative' }}>
+          {/* Mobile sidebar overlay */}
+          {isMobile && sidebarOpen && (
+            <div onClick={() => setSidebarOpen(false)}
+              style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.4)', zIndex:150, top:52 }} />
           )}
-          <main style={{ flex:1, overflowY:'auto' }}>
+
+          {/* Sidebar */}
+          {page !== 'users' && (
+            <Sidebar
+              profile={profile}
+              onOpenProject={openProject}
+              activeProjectId={activeProjectId}
+              onHome={goHome}
+              isMobile={isMobile}
+              isOpen={isMobile ? sidebarOpen : true}
+            />
+          )}
+
+          {/* Main content */}
+          <main style={{ flex:1, overflowY:'auto', minWidth:0 }}>
             {page === 'dashboard' && <Dashboard profile={profile} onOpenProject={openProject} />}
-            {page === 'project' && <ProjectPage projectId={activeProjectId} profile={profile} onBack={goHome} />}
+            {page === 'project' && <ProjectPage projectId={activeProjectId} profile={profile} onBack={goHome} isMobile={isMobile} />}
             {page === 'users' && <UsersPage profile={profile} onBack={goHome} />}
           </main>
         </div>
@@ -62,42 +96,60 @@ export default function App() {
   )
 }
 
-function Topbar({ profile, onHome, onUsers, page }) {
+function Topbar({ profile, onHome, onUsers, isMobile, sidebarOpen, setSidebarOpen }) {
   const roleColors = { owner:'#1D9E75', admin:'#185FA5', pm:'#534AB7', employee:'#C97A18', sub:'#B83232' }
   return (
-    <header style={{ background:'var(--slate)', color:'#fff', height:52, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 24px', position:'sticky', top:0, zIndex:300, flexShrink:0 }}>
-      <div style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer' }} onClick={onHome}>
-        <div style={{ width:30, height:30, background:'var(--green)', borderRadius:7, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:800, fontSize:12 }}>LC</div>
-        <span style={{ fontSize:15, fontWeight:600 }}>LanCo Construction</span>
-        <span style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginLeft:2 }}>Project Tracker</span>
+    <header style={{ background:'var(--slate)', color:'#fff', height:52, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 16px', position:'sticky', top:0, zIndex:300, flexShrink:0 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+        {isMobile && (
+          <button onClick={() => setSidebarOpen(o => !o)}
+            style={{ background:'none', border:'none', color:'#fff', fontSize:20, cursor:'pointer', padding:'4px 6px', lineHeight:1 }}>
+            ☰
+          </button>
+        )}
+        <div style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer' }} onClick={onHome}>
+          <div style={{ width:28, height:28, background:'var(--green)', borderRadius:7, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:800, fontSize:11 }}>LC</div>
+          {!isMobile && <span style={{ fontSize:15, fontWeight:600 }}>LanCo Construction</span>}
+          {isMobile && <span style={{ fontSize:14, fontWeight:600 }}>LanCo</span>}
+          {!isMobile && <span style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>Project Tracker</span>}
+        </div>
       </div>
-      <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-        {profile?.role === 'owner' && (
+
+      <div style={{ display:'flex', alignItems:'center', gap: isMobile ? 8 : 12 }}>
+        {profile?.role === 'owner' && !isMobile && (
           <button onClick={onUsers} style={{ background:'none', border:'1px solid rgba(255,255,255,0.2)', borderRadius:'var(--rs)', padding:'5px 12px', color:'#fff', fontSize:12, cursor:'pointer' }}>
             Manage users
           </button>
         )}
-        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-          <div style={{ width:28, height:28, borderRadius:'50%', background: roleColors[profile?.role]||'#555', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700 }}>
+        {profile?.role === 'owner' && isMobile && (
+          <button onClick={onUsers} style={{ background:'none', border:'none', color:'rgba(255,255,255,0.7)', fontSize:12, cursor:'pointer' }}>
+            Users
+          </button>
+        )}
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          <div style={{ width:26, height:26, borderRadius:'50%', background: roleColors[profile?.role]||'#555', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700 }}>
             {(profile?.full_name||'?')[0].toUpperCase()}
           </div>
-          <div>
-            <div style={{ fontSize:12, fontWeight:500 }}>{profile?.full_name||'User'}</div>
-            <div style={{ fontSize:10, color:'rgba(255,255,255,0.5)', textTransform:'capitalize' }}>{profile?.role}</div>
-          </div>
+          {!isMobile && (
+            <div>
+              <div style={{ fontSize:12, fontWeight:500 }}>{profile?.full_name||'User'}</div>
+              <div style={{ fontSize:10, color:'rgba(255,255,255,0.5)', textTransform:'capitalize' }}>{profile?.role}</div>
+            </div>
+          )}
         </div>
-        <button onClick={() => supabase.auth.signOut()} style={{ background:'none', border:'none', color:'rgba(255,255,255,0.5)', fontSize:12, cursor:'pointer' }}>Sign out</button>
+        <button onClick={() => supabase.auth.signOut()} style={{ background:'none', border:'none', color:'rgba(255,255,255,0.5)', fontSize:12, cursor:'pointer' }}>
+          {isMobile ? '↩' : 'Sign out'}
+        </button>
       </div>
     </header>
   )
 }
 
-function Sidebar({ profile, onOpenProject, activeProjectId, onHome }) {
+function Sidebar({ profile, onOpenProject, activeProjectId, onHome, isMobile, isOpen }) {
   const [projects, setProjects] = useState([])
 
   useEffect(() => {
     loadProjects()
-    // subscribe to project changes for live sidebar updates
     const ch = supabase.channel('sidebar-projects')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, loadProjects)
       .subscribe()
@@ -124,8 +176,31 @@ function Sidebar({ profile, onOpenProject, activeProjectId, onHome }) {
     return total ? Math.round(done / total * 100) : 0
   }
 
+  const sidebarStyle = isMobile ? {
+    position: 'fixed',
+    top: 52,
+    left: isOpen ? 0 : -260,
+    width: 260,
+    height: 'calc(100vh - 52px)',
+    background: 'var(--white)',
+    borderRight: '1px solid var(--rule)',
+    overflowY: 'auto',
+    zIndex: 200,
+    transition: 'left 0.25s ease',
+    boxShadow: isOpen ? '4px 0 16px rgba(0,0,0,0.15)' : 'none',
+  } : {
+    width: 240,
+    flexShrink: 0,
+    background: 'var(--white)',
+    borderRight: '1px solid var(--rule)',
+    overflowY: 'auto',
+    position: 'sticky',
+    top: 52,
+    height: 'calc(100vh - 52px)',
+  }
+
   return (
-    <aside style={{ width:240, flexShrink:0, background:'var(--white)', borderRight:'1px solid var(--rule)', overflowY:'auto', position:'sticky', top:52, height:'calc(100vh - 52px)' }}>
+    <aside style={sidebarStyle}>
       <div style={{ padding:'12px 0' }}>
         {!projects.length
           ? <div style={{ padding:16, fontSize:12, color:'var(--ink-light)', fontStyle:'italic' }}>No projects yet.</div>
@@ -135,11 +210,11 @@ function Sidebar({ profile, onOpenProject, activeProjectId, onHome }) {
               const pc = pct(p)
               return (
                 <div key={p.id} onClick={() => onOpenProject(p.id)}
-                  style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 12px', borderRadius:'var(--rs)', cursor:'pointer', margin:'1px 8px', background: p.id===activeProjectId ? 'var(--green-light)' : 'transparent' }}>
-                  <div style={{ width:7, height:7, borderRadius:'50%', background: pc===100 ? 'var(--green)' : pc>0 ? 'var(--amber)' : 'var(--rule)', flexShrink:0 }} />
+                  style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 12px', borderRadius:'var(--rs)', cursor:'pointer', margin:'1px 8px', background: p.id===activeProjectId ? 'var(--green-light)' : 'transparent' }}>
+                  <div style={{ width:8, height:8, borderRadius:'50%', background: pc===100 ? 'var(--green)' : pc>0 ? 'var(--amber)' : 'var(--rule)', flexShrink:0 }} />
                   <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:12, fontWeight:500, color: p.id===activeProjectId ? 'var(--green-dark)' : 'var(--ink)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{p.client}</div>
-                    <div style={{ fontSize:10, color:'var(--ink-light)' }}>{pc}% complete</div>
+                    <div style={{ fontSize:13, fontWeight:500, color: p.id===activeProjectId ? 'var(--green-dark)' : 'var(--ink)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{p.client}</div>
+                    <div style={{ fontSize:11, color:'var(--ink-light)' }}>{pc}% complete</div>
                   </div>
                 </div>
               )
